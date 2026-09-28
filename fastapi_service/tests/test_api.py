@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 
 def test_root_and_health():
     with patch(
-        "app.services.model_service.ModelService.start",
+        "app.main.ModelService.start",
         return_value=None,
     ):
         from app.main import app
@@ -18,7 +18,7 @@ def test_root_and_health():
 
 def test_invalid_prediction_request():
     with patch(
-        "app.services.model_service.ModelService.start",
+        "app.main.ModelService.start",
         return_value=None,
     ):
         from app.main import app
