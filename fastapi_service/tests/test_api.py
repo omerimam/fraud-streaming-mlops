@@ -1,12 +1,13 @@
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 
+from app.services.model_service import ModelService
+
+
 def test_root_and_health():
-    with patch(
-        "app.main.ModelService.start",
-        return_value=None,
-    ):
+    with patch.object(ModelService, "start", return_value=None):
         from app.main import app
+
         with TestClient(app) as client:
             r = client.get("/")
             assert r.status_code == 200
@@ -16,12 +17,11 @@ def test_root_and_health():
             assert h.status_code == 200
             assert h.json()["status"] == "ok"
 
+
 def test_invalid_prediction_request():
-    with patch(
-        "app.main.ModelService.start",
-        return_value=None,
-    ):
+    with patch.object(ModelService, "start", return_value=None):
         from app.main import app
+
         with TestClient(app) as client:
             r = client.post(
                 "/api/v1/predict",
