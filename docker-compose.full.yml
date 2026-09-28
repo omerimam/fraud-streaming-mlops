@@ -1,0 +1,180 @@
+services:
+
+  postgres:
+    image: postgres:16
+    container_name: fraud-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-frauddb}
+      POSTGRES_USER: ${POSTGRES_USER:-fraud}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fraud}
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_replication_slots=10
+      - -c
+      - max_wal_senders=10
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fraud} -d ${POSTGRES_DB:-frauddb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  kafka:
+    image: bitnami/kafka:3.8
+    container_name: fraud-kafka
+    environment:
+      KAFKA_CFG_NODE_ID: 1
+      KAFKA_CFG_PROCESS_ROLES: broker,controller
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka_data:/bitnami/kafka
+    restart: unless-stopped
+
+  connect:
+    image: debezium/connect:3.0.0.Final
+    container_name: fraud-debezium-connect
+    environment:
+      BOOTSTRAP_SERVERS: kafka:9092
+      GROUP_ID: fraud-connect
+      CONFIG_STORAGE_TOPIC: fraud_connect_configs
+      OFFSET_STORAGE_TOPIC: fraud_connect_offsets
+      STATUS_STORAGE_TOPIC: fraud_connect_statuses
+    ports:
+      - "8083:8083"
+    depends_on:
+      - kafka
+      - postgres
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.4
+    container_name: fraud-mysql
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-frauddb}
+      MYSQL_USER: ${MYSQL_USER:-fraud}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-fraud}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:8
+    container_name: fraud-mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-admin}
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v3.16.1
+    container_name: fraud-mlflow
+    command:
+      - mlflow
+      - server
+      - --host
+      - 0.0.0.0
+      - --port
+      - "5000"
+      - --backend-store-uri
+      - sqlite:////home/omer/fraud_streaming_project/mlflow_data/mlflow.db
+      - --default-artifact-root
+      - /home/omer/fraud_streaming_project/mlflow_data/artifacts
+    ports:
+      - "5000:5000"
+    volumes:
+      # Preserve the exact absolute path already stored in the existing MLflow DB.
+      - ./mlflow_data:/home/omer/fraud_streaming_project/mlflow_data
+    restart: unless-stopped
+
+  fastapi:
+    build:
+      context: ./fastapi_service
+      dockerfile: Dockerfile
+    container_name: fraud-fastapi
+    environment:
+      APP_NAME: Fraud Detection API
+      APP_VERSION: 2.0.0
+      ENVIRONMENT: production
+      HOST: 0.0.0.0
+      PORT: 8000
+      LOG_LEVEL: INFO
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_REGISTERED_MODEL: FraudLogisticRegression
+      MLFLOW_MODEL_ALIAS: champion
+      SPARK_APP_NAME: fraud-fastapi-serving
+      SPARK_MASTER: local[*]
+      SPARK_UI_ENABLED: "false"
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mlflow
+    restart: unless-stopped
+
+  streamlit:
+    build:
+      context: ./streamlit_app
+      dockerfile: Dockerfile
+    container_name: fraud-streamlit
+    environment:
+      FASTAPI_BASE_URL: http://fastapi:8000
+      REQUEST_TIMEOUT: 120
+    ports:
+      - "8502:8501"
+    depends_on:
+      - fastapi
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: fraud-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus-docker.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      - fastapi
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.2.2
+    container_name: fraud-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  kafka_data:
+  mysql_data:
+  mongo_data:
+  prometheus_data:
+  grafana_data:

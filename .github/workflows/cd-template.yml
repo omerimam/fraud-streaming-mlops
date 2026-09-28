@@ -1,0 +1,20 @@
+name: Fraud Project CD Template
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deployment-template:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deployment placeholder
+        run: |
+          echo "CD is intentionally not connected to a real server yet."
+          echo "Later targets can be:"
+          echo "- Docker VM / server"
+          echo "- Kubernetes"
+          echo "- Cloud container service"

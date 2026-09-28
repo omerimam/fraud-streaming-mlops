@@ -1,0 +1,39 @@
+services:
+
+  fastapi:
+    build:
+      context: ./fastapi_service
+      dockerfile: Dockerfile
+    container_name: fraud-fastapi
+    environment:
+      APP_NAME: Fraud Detection API
+      APP_VERSION: 2.0.0
+      ENVIRONMENT: docker
+      HOST: 0.0.0.0
+      PORT: 8000
+      LOG_LEVEL: INFO
+      MLFLOW_TRACKING_URI: http://host.docker.internal:5000
+      MLFLOW_REGISTERED_MODEL: FraudLogisticRegression
+      MLFLOW_MODEL_ALIAS: champion
+      SPARK_APP_NAME: fraud-fastapi-serving
+      SPARK_MASTER: local[*]
+      SPARK_UI_ENABLED: "false"
+    ports:
+      - "8000:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  streamlit:
+    build:
+      context: ./streamlit_app
+      dockerfile: Dockerfile
+    container_name: fraud-streamlit
+    environment:
+      FASTAPI_BASE_URL: http://fastapi:8000
+      REQUEST_TIMEOUT: 120
+    ports:
+      - "8502:8501"
+    depends_on:
+      - fastapi
+    restart: unless-stopped

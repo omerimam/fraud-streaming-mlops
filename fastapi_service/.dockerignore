@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.env
+.git/
+.gitignore
+*.log
+README.md
+sample_request.json

@@ -1,0 +1,14 @@
+{
+  "trans_num": "API_TEST_001",
+  "trans_date_trans_time": "2026-09-26T21:30:00",
+  "dob": "1985-06-15",
+  "amt": 950.5,
+  "city_pop": 120000,
+  "lat": 24.7136,
+  "long": 46.6753,
+  "merch_lat": 25.1972,
+  "merch_long": 55.2744,
+  "category": "shopping_net",
+  "gender": "M",
+  "state": "CA"
+}
